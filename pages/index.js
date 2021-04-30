@@ -1,65 +1,323 @@
 import Head from 'next/head'
 import styles from '../styles/Home.module.css'
+import {UiFileInputButton} from '../components/ui/UiFileInputButton'
+import axios from 'axios'
+import {useState, useEffect} from 'react';
+import * as d3 from 'd3-hierarchy';
+
+
+
+const SLIDEWIDTH  = 200;
+const SLIDEHEIGHT = 100;
+
+const _t1 = {
+    "root" : "slide1.jpg",
+    "slide1.jpg" : ["slide2.jpg"],
+    "slide2.jpg" : ["slide3.jpg"],
+    "slide3.jpg" : ["slide4.jpg", "slide5.jpg"],
+    "slide4.jpg" : [],
+    "slide5.jpg" : [],
+}
+
+
+const _flatten = list => list.reduce(
+  (a, b) => a.concat(Array.isArray(b) ? _flatten(b) : b), []
+);
+
+const _slink = (sx, sy, tx, ty) =>{
+  return <line key={`${tx}${ty}`} x1={sx} y1={sy} x2={tx} y2={ty} style={{stroke:"#000", strokeWidth:"2"}}></line>       
+}
+const _clink = (sx, sy, tx, ty) => {
+  return <path d={`M ${sx},${sy} C ${(sx + tx) / 2},${sy} ${(sx + tx) / 2},${ty} ${tx},${ty}`}/>;
+}
+
+const links = (node={})=>{
+ 
+  if (Object.keys(node).length <= 0){
+    return [];
+  }
+  return _flatten([
+    {    
+      from : {
+        name:node.data.slide,
+        x: node.x,
+        y: node.y +110
+      },
+      to : (node.children||[]).map(c=>({slide:c.data.slide,x:c.x, y:c.y}))
+    },
+    ...(node.children || []).map(c=>links(c))
+  ])
+}
+
+
+const insert = (lookup, slide)=>{
+  const children = lookup[slide] || [];
+  return {slide, children : children.map(c => insert(lookup, c))}
+}
+
+const convertToHierarchy = (lut)=>{
+    return insert (lut, lut["root"]);
+}
+
+const generatelookuptable = (arr=[], index=0, table={})=>{
+  if (Object.keys(table).length <= 0){
+    table = {root:arr[0]}
+  }
+  if (arr.length >= index-1){
+    if (arr[index]){
+      table[arr[index]] = arr[index+1] ? [arr[index+1]] : [];
+      return generatelookuptable(arr, index+1, table);
+    }
+  }
+  return table;
+}
+
+const t1 = {
+    slide: "slide1.jpg", children :[
+          {
+            slide: "slide2.jpg",
+            children: [
+               {
+                 slide: "slide3.jpg",
+                 children: [
+                    {
+                      slide: "slide4.jpg",
+                      children: [],
+                    },
+                    {
+                      slide: "slide5.jpg",
+                      children: [],
+                    }
+                 ]
+               }
+
+            ]
+          }
+    ]
+}
 
 export default function Home() {
+
+  //const [slides, setSlides] = useState(convertToHierarchy(_t1));
+  const [path, setPath] = useState("/pdfs/split");
+
+  const [tree, setTree] = useState({});
+  const [lookuptable, setLookuptable] = useState(_t1);
+  const [dims, setDims] = useState({w:0,h:0});
+  const [child, setChild] = useState();
+
+  useEffect(()=>{
+    const depth = (Object.keys(lookuptable).length);
+    const width = Object.keys(lookuptable||{}).reduce((acc, key)=>{
+        if (key == "root") return acc;
+        return Math.max(acc, lookuptable[key].length);
+    },0) + 2;
+
+
+    setDims({w:width,h:depth});
+
+    const _tree = d3.tree().size([width*SLIDEWIDTH, (depth-1)*SLIDEHEIGHT])(d3.hierarchy(convertToHierarchy(lookuptable), d=>d.children))
+  
+    setTree(_tree);
+    setChild();
+  }, [lookuptable])
+
+  const walk = (tree={})=>{
+    const {children=[]} = tree;
+    if (children.length == 0)
+      return -1;
+    return 1 + walk(children[0]);
+  }
+
+  /*const treelength = (tree={})=>{
+    //const {children=[]} = tree[root];
+    return walk(tree);
+  }
+
+  const children = (arr=[], index=0)=>{
+
+    if (arr.length > index-1){
+      return {slide:arr[index], children: [children(arr, index+1)]};
+    }
+    return {slide:arr[index], children:[]};
+  }*/
+
+ 
+  
+  //
+  const onChange = async (formData) => {
+    setLookuptable({});
+    const config = {
+      headers: { 'content-type': 'multipart/form-data' },
+      onUploadProgress: (event) => {
+        console.log(`Current progress:`, Math.round((event.loaded * 100) / event.total));
+      },
+    };
+
+    const response = await axios.post('/api/upload', formData, config);
+
+    const {nodes,path} = response.data;
+    setPath(path);
+    console.log("have slides", nodes, path);
+    
+    setLookuptable(generatelookuptable(nodes));
+    console.log('response', nodes);
+  };
+
+ 
+ 
+
+  const parentfor = (node)=>{
+      const keys = Object.keys(lookuptable);
+
+      for (let i = 0; i < keys.length; i++){
+         if ((lookuptable[keys[i]] || []).indexOf(node) !== -1){
+           return keys[i];
+         }
+      }   
+      return null;
+  }
+
+  const makeParent = (parent, child)=>{
+      
+      console.log("lookup table is", lookuptable);
+    
+      const _children     = [...lookuptable[child]];
+      const _childparent  = parentfor(child);
+
+     
+      const filtered = Object.keys(lookuptable).reduce((acc, key)=>{
+          //ignore root!
+          if (key === "root"){
+            return {
+              ...acc,
+              [key]:lookuptable[key]
+            }
+          }
+
+          const children = lookuptable[key] || [];
+          
+          if (key==parent){
+              return {
+                ...acc,
+                [key]: [...children, child]
+              }
+          }
+
+          
+          if (children.indexOf(child !== -1)){
+            return {
+              ...acc,
+              [key] : [...children.filter(i=>i!==child)]
+            }
+          }
+
+          //return unchanged
+          return {
+            ...acc,
+            [key] : children,
+          }
+      },{});
+
+      setLookuptable(filtered);
+  }
+
+  const nodeSelected  = (node)=>{
+      if (child){
+          console.log("ok time to move child!!", child, "to  parent", node);
+          makeParent(node, child);
+         
+      }else{
+        setChild(node);
+      }
+  }
+
+  const renderTree = (node)=>{
+    if (Object.keys(node).length <= 0){
+      return;
+    }
+
+    const id = `n${node.x}${node.y}`;
+
+    return <g key={id}> 
+                <g key={id} transform={`translate(${node.x - (192/2)}, ${node.y})`}  id="Artboard11">
+                  <defs>
+                      <image id={`_Image1${id}`} width="192px" height="108px" xlinkHref={`${path}/${node.data.slide}`}/>
+                  </defs>
+                
+                  <use onClick={()=>{nodeSelected(node.data.slide)}} id="pg_0001.png" xlinkHref={`#_Image1${id}`} x="0" y="0" width="192px" height="108px"/>
+                 
+                </g>)
+                {(node.children || []).map(n=>renderTree(n))}
+          </g>
+  }
+
+  
+  const renderTargets = (node)=>{
+    if (Object.keys(node).length <= 0){
+      return;
+    }
+    const id = `t${node.x}${node.y}`;
+console.log(node);
+    const haschildren = (node.children || []).length > 0;
+    const hasparent = node.parent != null;
+
+    const renderFromTargets = ()=>{
+      return  (<g>
+                <circle cx="96" cy="110" r="8" style={{fill:"#fff",stroke:"#ae2b4d",strokeWidth:"2.5px"}}/>
+                <circle cx="96" cy="110" r="3" style={{fill:"#ae2b4d",stroke:"#cc6767",strokeWidth:"2.5px"}}/></g>)
+    }
+
+    const renderToTargets = ()=>{
+      return  (<g>
+                  <circle cx="96" cy="0" r="8" style={{fill:"#fff",stroke:"#762bae",strokeWidth:"2.5px"}}/>
+                  <circle cx="96" cy="0" r="3" style={{fill:"#ae2b4d",stroke:"#6F67CC",strokeWidth:"2.5px"}}/></g>)
+    }
+
+    return <g key={id}> 
+                <g key={id} transform={`translate(${node.x - (192/2)}, ${node.y})`}  id="Artboard11">
+                
+                  {hasparent && renderToTargets()}
+                  {haschildren && renderFromTargets()}
+                  
+                </g>)
+                {(node.children || []).map(n=>renderTargets(n))}
+          </g>
+  }
+
+
+  const renderLinks = (links)=>{
+    return links.map((link)=>{
+
+        return link.to.map((l)=>{
+
+            return <g key={`${l.x},${l.y}`}>
+                        {_slink(link.from.x, link.from.y, l.x, l.y)}
+                   </g>
+        });
+    });
+}
+
   return (
     <div className={styles.container}>
       <Head>
-        <title>Create Next App</title>
+        <title>Slide Forest</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className={styles.main}>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
+      <main>
+          <UiFileInputButton
+      label="Upload Single File"
+      uploadFileName="thePdf"
+      onChange={onChange}
+    />
+    <svg width={`${dims.w*SLIDEWIDTH}px`} height={`${(dims.h+1)*SLIDEHEIGHT}px`}>
+        {renderTree(tree)}
+        {renderLinks(links(tree))}
+        {renderTargets(tree)}
+    </svg>
 
-        <p className={styles.description}>
-          Get started by editing{' '}
-          <code className={styles.code}>pages/index.js</code>
-        </p>
-
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h3>Documentation &rarr;</h3>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h3>Learn &rarr;</h3>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/master/examples"
-            className={styles.card}
-          >
-            <h3>Examples &rarr;</h3>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/import?filter=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-          >
-            <h3>Deploy &rarr;</h3>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
       </main>
-
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <img src="/vercel.svg" alt="Vercel Logo" className={styles.logo} />
-        </a>
-      </footer>
     </div>
   )
 }

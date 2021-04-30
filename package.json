@@ -8,8 +8,20 @@
     "start": "next start"
   },
   "dependencies": {
+    "@types/react": "^17.0.4",
+    "axios": "^0.21.1",
+    "d3-hierarchy": "^2.0.0",
+    "glob": "^7.1.6",
+    "multer": "^1.4.2",
     "next": "10.x",
+    "next-connect": "^0.10.1",
     "react": "17.x",
-    "react-dom": "17.x"
+    "react-dom": "17.x",
+    "typescript": "^4.2.4"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.2.5",
+    "postcss": "^8.2.13",
+    "tailwindcss": "^2.1.2"
   }
 }

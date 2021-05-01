@@ -7,16 +7,14 @@ import * as d3 from 'd3-hierarchy';
 
 
 
-const SLIDEWIDTH  = 200;
-const SLIDEHEIGHT = 100;
 
 const _t1 = {
     "root" : "slide1.jpg",
     "slide1.jpg" : ["slide2.jpg"],
     "slide2.jpg" : ["slide3.jpg"],
     "slide3.jpg" : ["slide4.jpg", "slide5.jpg"],
-    "slide4.jpg" : [],
-    "slide5.jpg" : [],
+    "slide4.jpg" : ["slide10.jpg"],
+    "slide5.jpg" : ["slide6.jpg", "slide7.jpg", "slide8.jpg", "slide9.jpg"],
 }
 
 
@@ -104,20 +102,26 @@ export default function Home() {
   const [tree, setTree] = useState({});
   const [lookuptable, setLookuptable] = useState(_t1);
   const [dims, setDims] = useState({w:0,h:0});
+  const [translate, setTranslate]= useState(0);
+
   const [child, setChild] = useState();
 
   useEffect(()=>{
-    const depth = (Object.keys(lookuptable).length);
-    const width = Object.keys(lookuptable||{}).reduce((acc, key)=>{
-        if (key == "root") return acc;
-        return Math.max(acc, lookuptable[key].length);
-    },0) + 2;
 
+    const _tree = d3.tree().nodeSize([210,180])(d3.hierarchy(convertToHierarchy(lookuptable), d=>d.children))
+    
+    //get dimensions of tree for rendering!
+    const leaves = _tree.leaves();
+    console.log(leaves);
+    const minmax = leaves.reduce((acc, node)=>{
+          return {minx:Math.min(acc.minx, node.x), maxx:Math.max(acc.maxx, node.x),miny:Math.min(acc.miny, node.y), maxy:Math.max(acc.maxy, node.y)}
+    }, {minx:0, maxx:0, miny:0, maxy:0});
 
-    setDims({w:width,h:depth});
-
-    const _tree = d3.tree().size([width*SLIDEWIDTH, (depth-1)*SLIDEHEIGHT])(d3.hierarchy(convertToHierarchy(lookuptable), d=>d.children))
-  
+    console.log(minmax);
+    const _translate = Math.abs(minmax.minx);
+    setDims({w: (minmax.maxx-minmax.minx)+210, h:(minmax.maxy-minmax.miny)+180});
+    setTranslate(_translate);
+    console.log(minmax, _translate);
     setTree(_tree);
     setChild();
   }, [lookuptable])
@@ -180,7 +184,7 @@ export default function Home() {
 
   const makeParent = (parent, child)=>{
       
-      console.log("lookup table is", lookuptable);
+
     
       const _children     = [...lookuptable[child]];
       const _childparent  = parentfor(child);
@@ -224,7 +228,7 @@ export default function Home() {
 
   const nodeSelected  = (node)=>{
       if (child){
-          console.log("ok time to move child!!", child, "to  parent", node);
+        
           makeParent(node, child);
          
       }else{
@@ -240,7 +244,7 @@ export default function Home() {
     const id = `n${node.x}${node.y}`;
 
     return <g key={id}> 
-                <g key={id} transform={`translate(${node.x - (192/2)}, ${node.y})`}  id="Artboard11">
+                <g key={id} transform={`translate(${node.x}, ${node.y})`}  id="Artboard11">
                   <defs>
                       <image id={`_Image1${id}`} width="192px" height="108px" xlinkHref={`${path}/${node.data.slide}`}/>
                   </defs>
@@ -258,20 +262,20 @@ export default function Home() {
       return;
     }
     const id = `t${node.x}${node.y}`;
-console.log(node);
+
     const haschildren = (node.children || []).length > 0;
     const hasparent = node.parent != null;
 
     const renderFromTargets = ()=>{
       return  (<g>
-                <circle cx="96" cy="110" r="8" style={{fill:"#fff",stroke:"#ae2b4d",strokeWidth:"2.5px"}}/>
-                <circle cx="96" cy="110" r="3" style={{fill:"#ae2b4d",stroke:"#cc6767",strokeWidth:"2.5px"}}/></g>)
+                <circle cx="192" cy="110" r="8" style={{fill:"#fff",stroke:"#ae2b4d",strokeWidth:"2.5px"}}/>
+                <circle cx="192" cy="110" r="3" style={{fill:"#ae2b4d",stroke:"#cc6767",strokeWidth:"2.5px"}}/></g>)
     }
 
     const renderToTargets = ()=>{
       return  (<g>
-                  <circle cx="96" cy="0" r="8" style={{fill:"#fff",stroke:"#762bae",strokeWidth:"2.5px"}}/>
-                  <circle cx="96" cy="0" r="3" style={{fill:"#ae2b4d",stroke:"#6F67CC",strokeWidth:"2.5px"}}/></g>)
+                  <circle cx="192" cy="0" r="8" style={{fill:"#fff",stroke:"#762bae",strokeWidth:"2.5px"}}/>
+                  <circle cx="192" cy="0" r="3" style={{fill:"#ae2b4d",stroke:"#6F67CC",strokeWidth:"2.5px"}}/></g>)
     }
 
     return <g key={id}> 
@@ -292,7 +296,7 @@ console.log(node);
         return link.to.map((l)=>{
 
             return <g key={`${l.x},${l.y}`}>
-                        {_slink(link.from.x, link.from.y, l.x, l.y)}
+                        {_slink(link.from.x+96, link.from.y, l.x+96, l.y)}
                    </g>
         });
     });
@@ -311,10 +315,12 @@ console.log(node);
       uploadFileName="thePdf"
       onChange={onChange}
     />
-    <svg width={`${dims.w*SLIDEWIDTH}px`} height={`${(dims.h+1)*SLIDEHEIGHT}px`}>
+    <svg width={`${dims.w}px`} height={`${dims.h}px`}>
+      <g transform={`translate(${translate},0)`}>
         {renderTree(tree)}
         {renderLinks(links(tree))}
         {renderTargets(tree)}
+        </g>
     </svg>
 
       </main>

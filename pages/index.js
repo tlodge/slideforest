@@ -7,6 +7,10 @@ import * as d3 from 'd3-hierarchy';
 
 
 
+const SLIDEWIDTH  = 192;
+const XPADDING = 18;
+const YPADDING = 78;
+const SLIDEHEIGHT = SLIDEWIDTH * 0.5625;
 
 const _t1 = {
     "root" : "slide1.jpg",
@@ -39,7 +43,7 @@ const links = (node={})=>{
       from : {
         name:node.data.slide,
         x: node.x,
-        y: node.y +110
+        y: node.y + SLIDEHEIGHT
       },
       to : (node.children||[]).map(c=>({slide:c.data.slide,x:c.x, y:c.y}))
     },
@@ -108,7 +112,7 @@ export default function Home() {
 
   useEffect(()=>{
 
-    const _tree = d3.tree().nodeSize([210,180])(d3.hierarchy(convertToHierarchy(lookuptable), d=>d.children))
+    const _tree = d3.tree().nodeSize([SLIDEWIDTH+XPADDING,SLIDEHEIGHT+YPADDING])(d3.hierarchy(convertToHierarchy(lookuptable), d=>d.children))
     
     //get dimensions of tree for rendering!
     const leaves = _tree.leaves();
@@ -119,7 +123,7 @@ export default function Home() {
 
     console.log(minmax);
     const _translate = Math.abs(minmax.minx);
-    setDims({w: (minmax.maxx-minmax.minx)+210, h:(minmax.maxy-minmax.miny)+180});
+    setDims({w: (minmax.maxx-minmax.minx)+SLIDEWIDTH+XPADDING, h:(minmax.maxy-minmax.miny)+SLIDEHEIGHT+YPADDING});
     setTranslate(_translate);
     console.log(minmax, _translate);
     setTree(_tree);
@@ -246,10 +250,10 @@ export default function Home() {
     return <g key={id}> 
                 <g key={id} transform={`translate(${node.x}, ${node.y})`}  id="Artboard11">
                   <defs>
-                      <image id={`_Image1${id}`} width="192px" height="108px" xlinkHref={`${path}/${node.data.slide}`}/>
+                      <image id={`_Image1${id}`} width={`${SLIDEWIDTH}px`} height={`${SLIDEHEIGHT}px`} xlinkHref={`${path}/${node.data.slide}`}/>
                   </defs>
                 
-                  <use onClick={()=>{nodeSelected(node.data.slide)}} id="pg_0001.png" xlinkHref={`#_Image1${id}`} x="0" y="0" width="192px" height="108px"/>
+                  <use onClick={()=>{nodeSelected(node.data.slide)}} id="pg_0001.png" xlinkHref={`#_Image1${id}`} x="0" y="0" width={`${SLIDEWIDTH}px`} height={`${SLIDEHEIGHT}px`}/>
                  
                 </g>)
                 {(node.children || []).map(n=>renderTree(n))}
@@ -268,18 +272,18 @@ export default function Home() {
 
     const renderFromTargets = ()=>{
       return  (<g>
-                <circle cx="192" cy="110" r="8" style={{fill:"#fff",stroke:"#ae2b4d",strokeWidth:"2.5px"}}/>
-                <circle cx="192" cy="110" r="3" style={{fill:"#ae2b4d",stroke:"#cc6767",strokeWidth:"2.5px"}}/></g>)
+                <circle cx={SLIDEWIDTH} cy={SLIDEHEIGHT} r="8" style={{fill:"#fff",stroke:"#ae2b4d",strokeWidth:"2.5px"}}/>
+                <circle cx={SLIDEWIDTH} cy={SLIDEHEIGHT} r="3" style={{fill:"#ae2b4d",stroke:"#cc6767",strokeWidth:"2.5px"}}/></g>)
     }
 
     const renderToTargets = ()=>{
       return  (<g>
-                  <circle cx="192" cy="0" r="8" style={{fill:"#fff",stroke:"#762bae",strokeWidth:"2.5px"}}/>
-                  <circle cx="192" cy="0" r="3" style={{fill:"#ae2b4d",stroke:"#6F67CC",strokeWidth:"2.5px"}}/></g>)
+                  <circle cx={SLIDEWIDTH} cy="0" r="8" style={{fill:"#fff",stroke:"#762bae",strokeWidth:"2.5px"}}/>
+                  <circle cx={SLIDEWIDTH} cy="0" r="3" style={{fill:"#ae2b4d",stroke:"#6F67CC",strokeWidth:"2.5px"}}/></g>)
     }
 
     return <g key={id}> 
-                <g key={id} transform={`translate(${node.x - (192/2)}, ${node.y})`}  id="Artboard11">
+                <g key={id} transform={`translate(${node.x - (SLIDEWIDTH/2)}, ${node.y})`}  id="Artboard11">
                 
                   {hasparent && renderToTargets()}
                   {haschildren && renderFromTargets()}
@@ -296,7 +300,7 @@ export default function Home() {
         return link.to.map((l)=>{
 
             return <g key={`${l.x},${l.y}`}>
-                        {_slink(link.from.x+96, link.from.y, l.x+96, l.y)}
+                        {_slink(link.from.x+(SLIDEWIDTH/2), link.from.y, l.x+(SLIDEWIDTH/2), l.y)}
                    </g>
         });
     });

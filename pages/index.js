@@ -4,7 +4,8 @@ import {UiFileInputButton} from '../components/ui/UiFileInputButton'
 import axios from 'axios'
 import {useState, useEffect} from 'react';
 import * as d3 from 'd3-hierarchy';
-
+import {useD3} from '../hooks/useD3.js';
+import { schemeSet3 } from 'd3-scale-chromatic';
 
 
 const SLIDEWIDTH  = 192;
@@ -109,6 +110,15 @@ export default function Home() {
   const [translate, setTranslate]= useState(0);
 
   const [child, setChild] = useState();
+
+  const [count, setCount]= useState(0);
+
+  const slidetree = useD3(
+    (svg) => {
+      console.log("lookuptable has changed!!");
+      svg.selectAll("circle").transition().duration(750).attr("r", 100*Math.random());
+    } 
+  ,[count]);
 
   useEffect(()=>{
 
@@ -272,7 +282,7 @@ export default function Home() {
 
     const renderFromTargets = ()=>{
       return  (<g>
-                <circle cx={SLIDEWIDTH} cy={SLIDEHEIGHT} r="8" style={{fill:"#fff",stroke:"#ae2b4d",strokeWidth:"2.5px"}}/>
+                <circle id="acircle" cx={SLIDEWIDTH} cy={SLIDEHEIGHT} r="8" style={{fill:"#fff",stroke:"#ae2b4d",strokeWidth:"2.5px"}}/>
                 <circle cx={SLIDEWIDTH} cy={SLIDEHEIGHT} r="3" style={{fill:"#ae2b4d",stroke:"#cc6767",strokeWidth:"2.5px"}}/></g>)
     }
 
@@ -314,19 +324,15 @@ export default function Home() {
       </Head>
 
       <main>
-          <UiFileInputButton
-      label="Upload Single File"
-      uploadFileName="thePdf"
-      onChange={onChange}
-    />
-    <svg width={`${dims.w}px`} height={`${dims.h}px`}>
-      <g transform={`translate(${translate},0)`}>
-        {renderTree(tree)}
-        {renderLinks(links(tree))}
-        {renderTargets(tree)}
-        </g>
-    </svg>
-
+        <button onClick={()=>setCount(count+1)}>click me!</button>
+            <UiFileInputButton label="Upload Single File" uploadFileName="thePdf" onChange={onChange}/>
+            <svg ref={slidetree} width={`${dims.w}px`} height={`${dims.h}px`}>
+              <g transform={`translate(${translate},0)`}>
+                {renderTree(tree)}
+                {renderLinks(links(tree))}
+                {renderTargets(tree)}
+                </g>
+            </svg>
       </main>
     </div>
   )

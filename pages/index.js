@@ -1,17 +1,18 @@
 import Head from 'next/head'
-import styles from '../styles/Home.module.css'
 import {UiFileInputButton} from '../components/ui/UiFileInputButton'
 import axios from 'axios'
 import {useState, useEffect} from 'react';
-import * as d3 from 'd3-hierarchy';
+import * as d3h from 'd3-hierarchy';
+import * as d3z from 'd3-zoom';
+import * as d3 from 'd3';
 import {useD3} from '../hooks/useD3.js';
-import { schemeSet3 } from 'd3-scale-chromatic';
+
 
 
 const SLIDEWIDTH  = 192;
+const WHRATIO = 0.5625;
 const XPADDING = 18;
 const YPADDING = 78;
-const SLIDEHEIGHT = SLIDEWIDTH * 0.5625;
 
 const _t1 = {
     "root" : "slide1.jpg",
@@ -34,23 +35,6 @@ const _clink = (sx, sy, tx, ty) => {
   return <path d={`M ${sx},${sy} C ${(sx + tx) / 2},${sy} ${(sx + tx) / 2},${ty} ${tx},${ty}`}/>;
 }
 
-const links = (node={})=>{
- 
-  if (Object.keys(node).length <= 0){
-    return [];
-  }
-  return _flatten([
-    {    
-      from : {
-        name:node.data.slide,
-        x: node.x,
-        y: node.y + SLIDEHEIGHT
-      },
-      to : (node.children||[]).map(c=>({slide:c.data.slide,x:c.x, y:c.y}))
-    },
-    ...(node.children || []).map(c=>links(c))
-  ])
-}
 
 
 const insert = (lookup, slide)=>{
@@ -107,22 +91,28 @@ export default function Home() {
   const [tree, setTree] = useState({});
   const [lookuptable, setLookuptable] = useState(_t1);
   const [dims, setDims] = useState({w:0,h:0});
+  const [sw, setSlideWidth] = useState(SLIDEWIDTH);
+  const [sh, setSlideHeight] = useState(SLIDEWIDTH*WHRATIO)
   const [translate, setTranslate]= useState(0);
-
   const [child, setChild] = useState();
-
   const [count, setCount]= useState(0);
+
+  useEffect(()=>{
+    setSlideHeight(sw*WHRATIO);
+  }, [sw]);
 
   const slidetree = useD3(
     (svg) => {
-      console.log("lookuptable has changed!!");
-      svg.selectAll("circle").transition().duration(750).attr("r", 100*Math.random());
+      const dgbox = svg.select("g#dragbox");
+     
+      svg.call(d3z.zoom().on("zoom",  (e)=>{dgbox.attr("transform", e.transform)})).call(d3z.zoom, d3z.zoomIdentity.scale(0.8))
+     
     } 
   ,[count]);
 
   useEffect(()=>{
 
-    const _tree = d3.tree().nodeSize([SLIDEWIDTH+XPADDING,SLIDEHEIGHT+YPADDING])(d3.hierarchy(convertToHierarchy(lookuptable), d=>d.children))
+    const _tree = d3h.tree().nodeSize([sw+XPADDING,sh+YPADDING])(d3h.hierarchy(convertToHierarchy(lookuptable), d=>d.children))
     
     //get dimensions of tree for rendering!
     const leaves = _tree.leaves();
@@ -133,7 +123,7 @@ export default function Home() {
 
     console.log(minmax);
     const _translate = Math.abs(minmax.minx);
-    setDims({w: (minmax.maxx-minmax.minx)+SLIDEWIDTH+XPADDING, h:(minmax.maxy-minmax.miny)+SLIDEHEIGHT+YPADDING});
+    setDims({w: (minmax.maxx-minmax.minx)+sw+XPADDING, h:(minmax.maxy-minmax.miny)+sh+YPADDING});
     setTranslate(_translate);
     console.log(minmax, _translate);
     setTree(_tree);
@@ -147,6 +137,24 @@ export default function Home() {
     return 1 + walk(children[0]);
   }
 
+  const links = (node={})=>{
+ 
+    if (Object.keys(node).length <= 0){
+      return [];
+    }
+    return _flatten([
+      {    
+        from : {
+          name:node.data.slide,
+          x: node.x,
+          y: node.y + sh
+        },
+        to : (node.children||[]).map(c=>({slide:c.data.slide,x:c.x, y:c.y}))
+      },
+      ...(node.children || []).map(c=>links(c))
+    ])
+  }
+  
   /*const treelength = (tree={})=>{
     //const {children=[]} = tree[root];
     return walk(tree);
@@ -260,10 +268,10 @@ export default function Home() {
     return <g key={id}> 
                 <g key={id} transform={`translate(${node.x}, ${node.y})`}  id="Artboard11">
                   <defs>
-                      <image id={`_Image1${id}`} width={`${SLIDEWIDTH}px`} height={`${SLIDEHEIGHT}px`} xlinkHref={`${path}/${node.data.slide}`}/>
+                      <image id={`_Image1${id}`} width={`${sw}px`} height={`${sh}px`} xlinkHref={`${path}/${node.data.slide}`}/>
                   </defs>
                 
-                  <use onClick={()=>{nodeSelected(node.data.slide)}} id="pg_0001.png" xlinkHref={`#_Image1${id}`} x="0" y="0" width={`${SLIDEWIDTH}px`} height={`${SLIDEHEIGHT}px`}/>
+                  <use onClick={()=>{nodeSelected(node.data.slide)}} id="pg_0001.png" xlinkHref={`#_Image1${id}`} x="0" y="0" width={`${sw}px`} height={`${sh}px`}/>
                  
                 </g>)
                 {(node.children || []).map(n=>renderTree(n))}
@@ -282,18 +290,18 @@ export default function Home() {
 
     const renderFromTargets = ()=>{
       return  (<g>
-                <circle id="acircle" cx={SLIDEWIDTH} cy={SLIDEHEIGHT} r="8" style={{fill:"#fff",stroke:"#ae2b4d",strokeWidth:"2.5px"}}/>
-                <circle cx={SLIDEWIDTH} cy={SLIDEHEIGHT} r="3" style={{fill:"#ae2b4d",stroke:"#cc6767",strokeWidth:"2.5px"}}/></g>)
+                <circle id="acircle" cx={sw} cy={sh} r="8" style={{fill:"#fff",stroke:"#ae2b4d",strokeWidth:"2.5px"}}/>
+                <circle cx={sw} cy={sh} r="3" style={{fill:"#ae2b4d",stroke:"#cc6767",strokeWidth:"2.5px"}}/></g>)
     }
 
     const renderToTargets = ()=>{
       return  (<g>
-                  <circle cx={SLIDEWIDTH} cy="0" r="8" style={{fill:"#fff",stroke:"#762bae",strokeWidth:"2.5px"}}/>
-                  <circle cx={SLIDEWIDTH} cy="0" r="3" style={{fill:"#ae2b4d",stroke:"#6F67CC",strokeWidth:"2.5px"}}/></g>)
+                  <circle cx={sw} cy="0" r="8" style={{fill:"#fff",stroke:"#762bae",strokeWidth:"2.5px"}}/>
+                  <circle cx={sw} cy="0" r="3" style={{fill:"#ae2b4d",stroke:"#6F67CC",strokeWidth:"2.5px"}}/></g>)
     }
 
     return <g key={id}> 
-                <g key={id} transform={`translate(${node.x - (SLIDEWIDTH/2)}, ${node.y})`}  id="Artboard11">
+                <g key={id} transform={`translate(${node.x - (sw/2)}, ${node.y})`}  id="Artboard11">
                 
                   {hasparent && renderToTargets()}
                   {haschildren && renderFromTargets()}
@@ -310,7 +318,7 @@ export default function Home() {
         return link.to.map((l)=>{
 
             return <g key={`${l.x},${l.y}`}>
-                        {_slink(link.from.x+(SLIDEWIDTH/2), link.from.y, l.x+(SLIDEWIDTH/2), l.y)}
+                        {_slink(link.from.x+(sw/2), link.from.y, l.x+(sw/2), l.y)}
                    </g>
         });
     });
@@ -327,7 +335,7 @@ export default function Home() {
         <button onClick={()=>setCount(count+1)}>click me!</button>
             <UiFileInputButton label="Upload Single File" uploadFileName="thePdf" onChange={onChange}/>
             <svg ref={slidetree} width={`${dims.w}px`} height={`${dims.h}px`}>
-              <g transform={`translate(${translate},0)`}>
+              <g id="dragbox" style={{fill:"red"}} transform={`translate(${translate},0)`}>
                 {renderTree(tree)}
                 {renderLinks(links(tree))}
                 {renderTargets(tree)}

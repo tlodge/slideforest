@@ -38,7 +38,8 @@ const _clink = (sx, sy, tx, ty) => {
 
 const insert = (lookup, slide)=>{
   const children = lookup[slide] || [];
-  return {slide, name: slide.split(".")[0], children : children.map(c => insert(lookup, c))}
+  const [name=["x"]] = (slide || "").split(".");
+  return {slide, name, children : children.map(c => insert(lookup, c))}
 }
 
 const convertToHierarchy = (lut)=>{
@@ -207,8 +208,9 @@ export default function Home() {
   const makeParent = (parent, child)=>{
       
 
-    
-      const _children     = [...lookuptable[child]];
+      console.log("making parent for child", child);
+      console.log("and lookuptable", lookuptable);
+      const _children     = [...(lookuptable[child]||[])];
       const _childparent  = parentfor(child);
 
      
@@ -250,11 +252,7 @@ export default function Home() {
 
   const nodeSelected  = (node)=>{
       if (child){
-        
-          makeParent(node, child);
-         
-      }else{
-        setChild(node);
+          makeParent(node, child);  
       }
   }
 
@@ -273,7 +271,7 @@ export default function Home() {
                       <image id={`_Image1${id}`} width={`${sw}px`} height={`${sh}px`} xlinkHref={`${path}/${node.data.slide}`}/>
                   </defs>
                   <rect id={`${node.data.name}`} x={0} y={0} width={SLIDEWIDTH+12} height={(SLIDEWIDTH*WHRATIO)+12} style={{fill:"rgb(59,59,59)",stroke:"white",strokeWidth:"1.87px"}}/>
-                  <use onClick={()=>{nodeSelected(node.data.slide)}} id="pg_0001.png" xlinkHref={`#_Image1${id}`} x="6" y="6" width={`${sw}px`} height={`${sh}px`}/>
+                  <use id="pg_0001.png" xlinkHref={`#_Image1${id}`} x="6" y="6" width={`${sw}px`} height={`${sh}px`}/>
                  
                 </g>)
                 {(node.children || []).map(n=>renderTree(n))}
@@ -291,7 +289,7 @@ export default function Home() {
     const hasparent = node.parent != null;
 
     const renderFromTargets = ()=>{
-      return  (<g id={`from${node.data.name}`}>
+      return  (<g id={`from${node.data.name}`} onClick={()=>{nodeSelected(node.data.slide)}}>
                 <circle id="bigtarget" cx={sw} cy={sh+28} r="8" style={{fill:"#fff",stroke:"#ae2b4d",strokeWidth:"2.5px"}}/>
                 <circle id="smalltarget" cx={sw} cy={sh+28} r="3" style={{fill:"#ae2b4d",stroke:"#cc6767",strokeWidth:"2.5px"}}/>  
               </g>)
@@ -318,8 +316,11 @@ export default function Home() {
 
             if (selected.length > 0){
               selected = [];
+              setChild();
               return;  
             }
+
+            setChild(node.data.slide);
             node.each(n=>{
               selected = [...selected, n];
               d3.select(`rect#${n.data.name}`).style("fill", "#CC6767");
@@ -389,6 +390,7 @@ export default function Home() {
       <main>
         <button onClick={()=>setCount(count+1)}>click me!</button>
             <UiFileInputButton label="Upload Single File" uploadFileName="thePdf" onChange={onChange}/>
+            <div className="flex justify-center items-center">
             <svg ref={slidetree} width={`${dims.w}px`} height={`${dims.h}px`}>
               
               <g id="dragbox"  style={{fill:"red"}}> 
@@ -398,6 +400,7 @@ export default function Home() {
                 </g>
                 
             </svg>
+            </div>
       </main>
     </div>
   )

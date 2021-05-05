@@ -5,6 +5,8 @@ import {useState, useEffect} from 'react';
 import * as d3h from 'd3-hierarchy';
 import * as d3z from 'd3-zoom';
 import * as d3 from 'd3';
+import { interpolatePath } from 'd3-interpolate-path';
+
 import {useD3} from '../hooks/useD3.js';
 
 
@@ -33,7 +35,8 @@ const _slink = (sx, sy, tx, ty) =>{
 }
 
 const _clink = (sx, sy, tx, ty) => {
-  return <path d={`M ${sx} ${sy} C ${(sx + tx) / 2} ${sy}, ${(sx + tx) / 2} ${ty}, ${tx} ${ty}`} style={{stroke:"#000", strokeWidth:"2.5", fill:"none"}}></path> 
+  return `M ${sx} ${sy} C ${(sx + tx) / 2} ${sy}, ${(sx + tx) / 2} ${ty}, ${tx} ${ty}`;
+  
 }
 
 const insert = (lookup, slide)=>{
@@ -89,6 +92,7 @@ export default function Home() {
   const [path, setPath] = useState("/pdfs/split");
 
   const [tree, setTree] = useState({});
+  const [clear, setClear] = useState(false);
   const [lookuptable, setLookuptable] = useState(_t1);
   const [dims, setDims] = useState({w:0,h:0});
   const [sw, setSlideWidth] = useState(SLIDEWIDTH);
@@ -104,18 +108,46 @@ export default function Home() {
   const slidetree = useD3(
    
     (svg) => {
-      console.log("AM IN USE D3");
       const dgbox = svg.select("g#dragbox");
     
       svg.call(d3z.zoom().on("zoom",  (e)=>{
         dgbox.attr("transform", e.transform)
       }))
-     
+    
+      svg.selectAll("circle#bigtarget").transition().duration(1000).attr("r", 8);
+      svg.selectAll("circle#smalltarget").transition().duration(1000).attr("r", 3);
+      svg.selectAll("g#slide").selectAll("rect").style("fill", "white");
     } 
-  ,[translate]);
+  ,[translate, clear]);
+
+
+  const lookupcoords = (node={})=>{
+    if (Object.keys(node).length <= 0){
+      return {};
+    }
+
+    const coords = {};
+    node.each(n=>coords[n.data.name] = {x:n.x,y:n.y});
+    return coords;
+  }
+
+  const lookuplinks = (lnks)=>{
+      return lnks.reduce((acc, link)=>{
+        return {...acc,
+            ...link.to.reduce((acc, item)=>{
+              return {
+                ...acc,
+                [`${link.from.name}_${item.name}`]: {from: link.from.name, to: item.name, x1:link.from.x, y1: link.from.y, x2:item.x, y2:item.y} 
+              }
+            },{})
+        }
+      },{})
+  }
 
   useEffect(()=>{
-    const _tree = d3h.tree().nodeSize([sw+XPADDING,sh+YPADDING])(d3h.hierarchy(convertToHierarchy(lookuptable), d=>d.children))
+  
+   
+    const _tree = d3h.tree().nodeSize([sw+XPADDING,sh+YPADDING])(d3h.hierarchy(convertToHierarchy(lookuptable), d=>d.children))  
     
     //get dimensions of tree for rendering!
     const leaves = _tree.leaves();
@@ -129,6 +161,8 @@ export default function Home() {
     setTranslate(_translate);
     setTree(_tree);
     setChild();
+    d3.selectAll("path").style("opacity",1);
+
   }, [lookuptable])
 
   const walk = (tree={})=>{
@@ -146,33 +180,18 @@ export default function Home() {
     return _flatten([
       {    
         from : {
-          name:node.data.slide,
+          name:node.data.name,
           x: node.x + translate,
           y: node.y + sh
         },
-        to : (node.children||[]).map(c=>({slide:c.data.slide,x:c.x+translate, y:c.y}))
+        to : (node.children||[]).map(c=>({name:c.data.name,x:c.x+translate, y:c.y}))
       },
       ...(node.children || []).map(c=>links(c))
     ])
   }
   
-  /*const treelength = (tree={})=>{
-    //const {children=[]} = tree[root];
-    return walk(tree);
-  }
-
-  const children = (arr=[], index=0)=>{
-
-    if (arr.length > index-1){
-      return {slide:arr[index], children: [children(arr, index+1)]};
-    }
-    return {slide:arr[index], children:[]};
-  }*/
-
- 
-  
-  //
   const onChange = async (formData) => {
+
     setLookuptable({});
     const config = {
       headers: { 'content-type': 'multipart/form-data' },
@@ -185,50 +204,36 @@ export default function Home() {
 
     const {nodes,path} = response.data;
     setPath(path);
-    console.log("have slides", nodes, path);
-    
     setLookuptable(generatelookuptable(nodes));
-    console.log('response', nodes);
+   
   };
-
- 
- 
-
-  const parentfor = (node)=>{
-      const keys = Object.keys(lookuptable);
-
-      for (let i = 0; i < keys.length; i++){
-         if ((lookuptable[keys[i]] || []).indexOf(node) !== -1){
-           return keys[i];
-         }
-      }   
-      return null;
-  }
 
   const makeParent = (parent, child)=>{
       
+      let lut = {...lookuptable};
 
-      console.log("making parent for child", child);
-      console.log("and lookuptable", lookuptable);
-      const _children     = [...(lookuptable[child]||[])];
-      const _childparent  = parentfor(child);
 
+      const {slide:childslide=""} = child.data || {};
+      const {slide:parentslide=""} = parent.data || {};
+
+      //parent may be a leaf, and so have no entry in the lookup table!
+      lut[parentslide] = lut[parentslide] || [];
      
-      const filtered = Object.keys(lookuptable).reduce((acc, key)=>{
+      const filtered = Object.keys(lut).reduce((acc, key)=>{
           //ignore root!
           if (key === "root"){
             return {
               ...acc,
-              [key]:lookuptable[key]
+              [key]:lut[key]
             }
           }
 
-          const children = lookuptable[key] || [];
+          const children = lut[key] || [];
           
-          if (key==parent){
+          if (key==parentslide){
               return {
                 ...acc,
-                [key]: [...children, child]
+                [key]: [...children, childslide]
               }
           }
 
@@ -236,7 +241,7 @@ export default function Home() {
           if (children.indexOf(child !== -1)){
             return {
               ...acc,
-              [key] : [...children.filter(i=>i!==child)]
+              [key] : [...children.filter(i=>i!==childslide)]
             }
           }
 
@@ -247,12 +252,44 @@ export default function Home() {
           }
       },{});
 
-      setLookuptable(filtered);
+      const coords = lookupcoords(tree);
+
+    
+      const newtree = d3h.tree().nodeSize([sw+XPADDING,sh+YPADDING])(d3h.hierarchy(convertToHierarchy(filtered), d=>d.children))  
+      const newcoords = lookupcoords(newtree);
+      
+
+      const linkcoords =  lookuplinks(links(tree));
+      const newlinkcoords = lookuplinks(links(newtree));
+
+      
+
+      Object.keys(linkcoords).map((key)=>{
+          d3.select(`g#${key}`).select("path").transition().duration(1000).style("opacity",0);
+          
+          
+          /*.attrTween('d', (d)=>{
+            const l1 = linkcoords[key];
+            const l2 = newlinkcoords[key] || l1; 
+              var previous = _clink(l1.x1+(sw/2), l1.y1+28, l1.x2+(sw/2), l1.y2);
+              var current =  _clink(l2.x1+(sw/2), l2.y1+28, l2.x2+(sw/2), l2.y2);
+              return interpolatePath(previous, current);
+          }).on("end", ()=>{setLookuptable(filtered)});*/
+      });
+   
+      Object.keys(coords).forEach((key)=>{
+        const {x,y} = newcoords[key];
+        d3.select(`g#slide_${key}`).transition().duration(1000).attr("transform", `translate(${x+translate}, ${y+20})`).on("end", ()=>setLookuptable(filtered));
+      });
+      //.on("end", ()=>setLookuptable(filtered));
+      
   }
 
-  const nodeSelected  = (node)=>{
+  const nodeSelected  = (e,node)=>{
+      e.stopPropagation();
       if (child){
           makeParent(node, child);  
+          setClear(!clear);
       }
   }
 
@@ -263,9 +300,9 @@ export default function Home() {
 
     const id = `n${node.x}${node.y}`;
 
-    return <g key={id}> 
+    return <g key={id} id="slide"> 
      
-                <g key={id} id="slide" transform={`translate(${node.x+translate}, ${node.y+20})`}>
+                <g key={id} id={`slide_${node.data.name}`} transform={`translate(${node.x+translate}, ${node.y+20})`}>
                  
                   <defs>
                       <image id={`_Image1${id}`} width={`${sw}px`} height={`${sh}px`} xlinkHref={`${path}/${node.data.slide}`}/>
@@ -289,7 +326,7 @@ export default function Home() {
     const hasparent = node.parent != null;
 
     const renderFromTargets = ()=>{
-      return  (<g id={`from${node.data.name}`} onClick={()=>{nodeSelected(node.data.slide)}}>
+      return  (<g id={`from${node.data.name}`} onClick={(e)=>{nodeSelected(e,node)}}>
                 <circle id="bigtarget" cx={sw} cy={sh+28} r="8" style={{fill:"#fff",stroke:"#ae2b4d",strokeWidth:"2.5px"}}/>
                 <circle id="smalltarget" cx={sw} cy={sh+28} r="3" style={{fill:"#ae2b4d",stroke:"#cc6767",strokeWidth:"2.5px"}}/>  
               </g>)
@@ -309,7 +346,7 @@ export default function Home() {
           let selected = [];
 
           const selectsubtree = (e, node)=>{
-            
+            e.stopPropagation();
             d3.selectAll("g#slide").selectAll("rect").style("fill", "white");
             d3.selectAll("circle#bigtarget").attr("r", 8);
             d3.selectAll("circle#smalltarget").attr("r", 3);
@@ -320,24 +357,36 @@ export default function Home() {
               return;  
             }
 
-            setChild(node.data.slide);
+            setChild(node);
             node.each(n=>{
               selected = [...selected, n];
               d3.select(`rect#${n.data.name}`).style("fill", "#CC6767");
             });
 
-            const parentfor = (n={})=>{
-              const parent = n.parent;
-
-              if (!parent)
-                return;
-              
-              d3.select(`g#from${parent.data.name}`).selectAll("circle#bigtarget").attr("r", 12);
-              d3.select(`g#from${parent.data.name}`).selectAll("circle#smalltarget").attr("r", 8);
-
-              parentfor(parent);
+            const allexcept = (nodestoignore=[])=>{
+                const eligible = [];
+                tree.each(n=>{
+                    if (nodestoignore.indexOf(n.data.name)==-1){
+                       eligible.push(n.data.name);
+                    }
+                })
+                return eligible;
             }
-            parentfor(node.parent);
+
+           
+            const highlightTargets = (node)=>{
+              let nodestoignore = [node.parent.data.name];
+              node.each(n=> nodestoignore = [...nodestoignore, n.data.name])
+              const eligible = allexcept(nodestoignore);
+              eligible.forEach(n=>{
+                d3.select(`g#from${n}`).selectAll("circle#bigtarget").transition().duration(1000).attr("r", 12);
+                d3.select(`g#from${n}`).selectAll("circle#smalltarget").transition().duration(1000).attr("r", 8);
+              });
+
+            }
+            
+            highlightTargets(node);
+            
           }
           
           return <g id ={node.data.name}>
@@ -355,11 +404,14 @@ export default function Home() {
                   </g>
           
     }
+
+   
+
     return <g key={id}> 
                 <g key={id} transform={`translate(${node.x + translate - (sw/2)}, ${node.y})`}  id="Artboard11">
                 
                   {hasparent && renderToTargets()}
-                  {haschildren && renderFromTargets()}
+                  {renderFromTargets()}
                   
                 </g>)
                 {(node.children || []).map(n=>renderTargets(n))}
@@ -372,8 +424,8 @@ export default function Home() {
 
         return link.to.map((l)=>{
 
-            return <g key={`${l.x},${l.y}`}>
-                        {_clink(link.from.x+(sw/2), link.from.y+28, l.x+(sw/2), l.y)}
+            return <g id={`${link.from.name}_${l.name}`} key={`${l.x},${l.y}`}>
+                        <path d={_clink(link.from.x+(sw/2), link.from.y+28, l.x+(sw/2), l.y)} style={{stroke:"#000", strokeWidth:"2.5", fill:"none"}}></path>
                         <line x1={l.x+(sw/2)} x2={l.x+(sw/2)} y1={l.y} y2={l.y+20} style={{strokeWidth:2.5, stroke:"black"}}/>
                    </g>
         });
@@ -391,9 +443,9 @@ export default function Home() {
         <button onClick={()=>setCount(count+1)}>click me!</button>
             <UiFileInputButton label="Upload Single File" uploadFileName="thePdf" onChange={onChange}/>
             <div className="flex justify-center items-center">
-            <svg ref={slidetree} width={`${dims.w}px`} height={`${dims.h}px`}>
+            <svg onClick={()=>{setClear(!clear)}} ref={slidetree} width={`${Math.max(dims.w, 500)}px`} height={`${dims.h}px`}>
               
-              <g id="dragbox"  style={{fill:"red"}}> 
+              <g  id="dragbox"  style={{fill:"red"}}> 
                 {renderTree(tree)}
                 {renderLinks(links(tree))}
                 {renderTargets(tree)}

@@ -9,6 +9,7 @@ import { interpolatePath } from 'd3-interpolate-path';
 import '../styles/Home.module.css';
 
 import {useD3} from '../hooks/useD3.js';
+import { isAccessor } from 'typescript';
 
 
 
@@ -112,28 +113,30 @@ const generatelookuptable = (arr=[], index=0, table={})=>{
   return table;
 }
 
-const t1 = {
-    slide: "slide1.jpg", children :[
-          {
-            slide: "slide2.jpg",
-            children: [
-               {
-                 slide: "slide3.jpg",
-                 children: [
-                    {
-                      slide: "slide4.jpg",
-                      children: [],
-                    },
-                    {
-                      slide: "slide5.jpg",
-                      children: [],
-                    }
-                 ]
-               }
+const links = (node={})=>{
+ 
+  if (Object.keys(node).length <= 0){
+    return [];
+  }
+  return  _flatten([
+    {    
+      from : {
+        name:node.data.name,
+        x: node.x ,
+        y: node.y + sh
+      },
+      to : (node.children||[]).map(c=>({name:c.data.name,x:c.x, y:c.y}))
+    },
+    ...(node.children || []).map(c=>links(c))
+  ]);
+}
 
-            ]
-          }
-    ]
+const _expanded = (arr)=>{
+  //TODO: ffs the tos can be {} or []!  FIX THIS!
+  return arr.reduce((acc,item)=>{
+      const {from={}, to=[]} = item;
+      return [...acc,...(to.map(t=>({from:from, "to":t})))]
+  },[]);
 }
 
 export default function Home() {
@@ -197,46 +200,59 @@ export default function Home() {
  ,[]);
 
 const treeref = useD3(root => {
-        // Inside the callback function, we can use D3
-          let data = [];
-        //const trees = [_t1,_t2,_t3];
-        //let index = 0;
-        //const randomData = ()=>{
-          const jsontree = convertToHierarchy(lookuptable);
-         
-          //index = (index + 1)%3;
-          const hier = (d3h.hierarchy(jsontree, d=>d.children));
-          const _tree = d3h.tree().nodeSize([sw+XPADDING,sh+YPADDING])(hier);  
-         
           
-        //}
-        //setInterval(()=>{
+    const jsontree = convertToHierarchy(lookuptable);
+    const hier = (d3h.hierarchy(jsontree, d=>d.children));
+    const _tree   =  d3h.tree().nodeSize([sw+XPADDING,sh+YPADDING])(hier);  
+    const _links  = links(_tree);
+
+    root.selectAll("g#slide")
+        .data(_tree.descendants(), d => d.data.name)
+        .join(
+        enter => {
+
+          const node = enter.append("g")
+                            .attr("id", "slide")
+                            .attr("transform", (d, i) => `translate(${d.x},${d.y+20})`)
           
-          data =  _tree.descendants();
-          root.selectAll("g#slide")
-              .data(data, d => d.data.name)
-              .join(
-              enter => {
-                const node = enter.append("g").attr("id", "slide").attr("transform", (d, i) => `translate(${d.x},${d.y+20})`) 
-                node.append("rect").attr("id", d=>d.data.name).attr("x", 0).attr("y",0).attr("width", sw+12).attr("height",sh+12).style("fill", "rgb(59,59,59)").style("stroke","white").style("stroke-width", "1.87px")
-                node.append("image").attr('xlink:href', d=>`${path}/${d.data.slide}`).attr("width", `${sw}px`).attr("height",`${sh}px`).attr("x",6).attr("y",6)
-              },
-              update => update,
-              exit => exit
-                  .call(exit =>
-                  exit.transition()
-                      .duration(1000)
-                      .delay((d, i) => i * 100)
-                      .attr("transform", (d,i) => `translate(${i * 50},50)`)
-                      .style("opacity", 0)
-                      .remove()
-                  )
-              )//following is the update I think!
-              .transition()
-              .duration(1000)
-              .delay((d, i) => i * 100)
-              .attr("transform", (d, i) => `translate(${d.x},${d.y+20})`)
-     // },2000);
+          node.append("rect")
+              .attr("id", d=>d.data.name)
+              .attr("x", 0)
+              .attr("y",0)
+              .attr("width", sw+12)
+              .attr("height",sh+12)
+              .style("fill", "rgb(59,59,59)")
+              .style("stroke","white")
+              .style("stroke-width", "1.87px")
+          
+          node.append("image")
+              .attr('xlink:href', d=>`${path}/${d.data.slide}`)
+              .attr("width", `${sw}px`)
+              .attr("height",`${sh}px`)
+              .attr("x",6)
+              .attr("y",6)
+        },
+        update => update,
+        
+        exit => exit
+            .call(exit =>
+              exit.transition()
+                  .duration(1000)
+                  .delay((d, i) => i * 100)
+                  .attr("transform", (d,i) => `translate(${i * 50},50)`)
+                  .style("opacity", 0)
+                  .remove()
+            )
+        )//following is the update I think!
+        .transition()
+        .duration(1000)
+        .delay((d, i) => i * 100)
+        .attr("transform", (d, i) => `translate(${d.x},${d.y+20})`)
+
+
+        console.log("links", _expanded(_links));
+        
+    
   }, [lookuptable]);
 
  

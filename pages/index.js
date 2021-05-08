@@ -135,7 +135,8 @@ const _expanded = (arr)=>{
   //TODO: ffs the tos can be {} or []!  FIX THIS!
   return arr.reduce((acc,item)=>{
       const {from={}, to=[]} = item;
-      return [...acc,...(to.map(t=>({from:from, "to":t})))]
+      const _to = Array.isArray(to) ? to : [to];
+      return [...acc,...(_to.map(t=>({from:from, "to":t})))]
   },[]);
 }
 
@@ -204,13 +205,20 @@ const treeref = useD3(root => {
     const jsontree = convertToHierarchy(lookuptable);
     const hier = (d3h.hierarchy(jsontree, d=>d.children));
     const _tree   =  d3h.tree().nodeSize([sw+XPADDING,sh+YPADDING])(hier);  
-    const _links  = links(_tree);
+    const _links  = _expanded(links(_tree));
+
+    console.log("have links", _links);
+
+
+
+
 
     root.selectAll("g#slide")
         .data(_tree.descendants(), d => d.data.name)
         .join(
         enter => {
 
+          //render slides!
           const node = enter.append("g")
                             .attr("id", "slide")
                             .attr("transform", (d, i) => `translate(${d.x},${d.y+20})`)
@@ -234,8 +242,7 @@ const treeref = useD3(root => {
         },
         update => update,
         
-        exit => exit
-            .call(exit =>
+        exit => exit.call(exit =>
               exit.transition()
                   .duration(1000)
                   .delay((d, i) => i * 100)
@@ -248,10 +255,74 @@ const treeref = useD3(root => {
         .duration(1000)
         .delay((d, i) => i * 100)
         .attr("transform", (d, i) => `translate(${d.x},${d.y+20})`)
-
-
-        console.log("links", _expanded(_links));
         
+        //render links!
+        root.selectAll("g#link").data(_links, d=>`${d.from}${d.to}`).join(
+            enter => {
+              const link = enter.append("g").attr("id", "link");
+              
+              link.append("path").attr("d", l=>{
+                console.log("have l", l);
+                return _clink(l.from.x+(sw/2), l.from.y+28, l.to.x+(sw/2), l.to.y);
+              })
+              .style("stroke","#000")
+              .style("stroke-width", 2.5)
+              .style("fill", "none")
+
+              link.append("line")
+                  .attr("x1", l=>l.to.x+sw/2).attr("x2",l=>l.to.x+sw/2).attr("y1", l=>l.to.y).attr("y2",l=>l.to.y+20)
+                  .style("stroke","#000")
+                  .style("stroke-width", 2.5)
+
+            },
+            update=>update,
+            exit => exit.call(exit=>exit.remove())
+        ).transition()
+        .duration(1000)
+        .attr("d", "")
+
+        //render targets!
+        root.selectAll("g#target")
+        .data(_tree.descendants(), d => d.data.name)
+        .join(
+          enter=>{
+            const target = enter.append("g").attr("id", "target").append("g").attr("transform", d=>`translate(${d.x-sw/2}, ${d.y})`)
+            //from target
+            target.append("circle").attr("id", "bigtarget").attr("cx",sw).attr("cy", sh+28).attr("r", 8).style("fill","#fff").style("stroke","#ae2b4d").attr("stroke-width",2.5);
+            target.append("circle").attr("id", "smalltarget").attr("cx",sw).attr("cy", sh+28).attr("r", 3).style("fill","#ae2b4d").style("stroke","#cc6767").attr("stroke-width",2.5);
+            
+            //control bar
+
+            const allslides = target.append("g")
+            allslides.append("circle").attr("cx",sw-30).attr("cy", 0).attr("r",10).style("fill", "#fff").style("stroke", "#000").attr("stroke-width",2.5)
+            
+            target.append("line")
+                  .attr("x1",sw-20).attr("x2",sw-8).attr("y1",0).attr("y2",0)
+                  .style("stroke","#000")
+                  .style("stroke-width", 2.5)
+                  .style("fill", "#fff")
+            
+            target.append("line")
+                  .attr("x1",sw+20).attr("x2",sw+8).attr("y1",0).attr("y2",0)
+                  .style("stroke","#000")
+                  .style("stroke-width", 2.5)
+                  .style("fill", "#fff")
+            
+            const oneslide = target.append("g")
+            oneslide.append("circle").attr("cx",sw+30).attr("cy", 0).attr("r",10).style("fill", "#fff").style("stroke", "#000").attr("stroke-width",2.5)
+
+
+            //to target
+            target.append("circle").attr("id", "smalltarget").attr("cx",sw).attr("cy", 0).attr("r", 8).style("fill","#fff").style("stroke","#762bae").attr("stroke-width",2.5);
+            target.append("circle").attr("id", "smalltarget").attr("cx",sw).attr("cy", 0).attr("r", 3).style("fill","#ae2b4d").style("stroke","#6F67CC").attr("stroke-width",2.5);
+
+           
+          },
+          update=>update,
+          exit=>exit.call(exit=>{
+
+          })
+        );
     
   }, [lookuptable]);
 

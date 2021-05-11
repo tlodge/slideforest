@@ -262,6 +262,15 @@ export default function Home() {
 
 //LOTS of gotchas here - need to make sure we re-bind the clicks and that we use useEffect to see the changes to state objects AND
 //pass in the changed items
+const allexcept = (tree, nodestoignore=[])=>{
+  const eligible = [];
+  tree.each(n=>{
+      if (nodestoignore.indexOf(n.data.name)==-1){
+         eligible.push(n.data.name);
+      }
+  })
+  return eligible;
+}
 
 const treeref = useD3((root) => {
            
@@ -271,8 +280,14 @@ const treeref = useD3((root) => {
     const _links  = _expanded(links(tree));
 
     const currentlinks = lookuplinks(_links);
-   
-   
+    let eligible = [];
+
+    if (child){
+      let nodestoignore = child ? [child.parent.data.name] : [];
+      child.each(n=> nodestoignore = [...nodestoignore, n.data.name]);
+      eligible = allexcept(tree,nodestoignore);
+    }
+
     root.selectAll("g#slide")
         .data(tree.descendants(), d => d.data.name) //check descendants are changing -- should it not be the name + x,y pos!!????!!!
         .join(
@@ -315,15 +330,15 @@ const treeref = useD3((root) => {
                   .style("opacity", 0)
                   .remove()
             )
-        )//following is the update I think!
+        )//update passed through to this..
         .transition()
         .duration(ANIMATION_DURATION)
-        .attr("transform", (d, i) => `translate(${d.x},${d.y+20})`)
+        .attr("transform", (d, i) => `translate(${d.x},${d.y+20})`);
         
     //render links!
     const link = root.selectAll("path#link").data(_links, d=>`${d.from.name}${d.to.name}`).join(
           enter => {
-            const link = enter.append("path").attr("id", "link").attr("d", l=>{
+            enter.append("path").attr("id", "link").attr("d", l=>{
               return _clink(l.from.x+(sw/2), l.from.y+28, l.to.x+(sw/2), l.to.y);
             })
             .style("stroke","#000")
@@ -344,7 +359,7 @@ const treeref = useD3((root) => {
           var current =  _clink(l.from.x+(sw/2), l.from.y+28, l.to.x+(sw/2), l.to.y);
           return interpolatePath(previous, current);
       }).on("end", ()=>{
-        treeref.current.last = currentlinks;
+        treeref.current.last = currentlinks; //memoise the previous links
       });
     
 
@@ -356,12 +371,12 @@ const treeref = useD3((root) => {
             const target = enter.append("g").attr("id", "target").attr("transform", d=>`translate(${d.x-sw/2}, ${d.y})`)
           
             //to target
-            target.append("circle").attr("id", "smalltarget").attr("cx",sw).attr("cy", 0).attr("r", 8).style("fill","#fff").style("stroke","#762bae").attr("stroke-width",2.5);
-            target.append("circle").attr("id", "smalltarget").attr("cx",sw).attr("cy", 0).attr("r", 3).style("fill","#ae2b4d").style("stroke","#6F67CC").attr("stroke-width",2.5);
+            target.append("circle").attr("id", "bigtotarget").attr("cx",sw).attr("cy", 0).attr("r", 8).style("fill","#fff").style("stroke","#762bae").attr("stroke-width",2.5);
+            target.append("circle").attr("id", "smalltotarget").attr("cx",sw).attr("cy", 0).attr("r", 3).style("fill","#ae2b4d").style("stroke","#6F67CC").attr("stroke-width",2.5);
 
             //from target
-            target.append("circle").attr("id", "bigtarget").attr("cx",sw).attr("cy", sh+28).attr("r", 8).style("fill","#fff").style("stroke","#ae2b4d").attr("stroke-width",2.5).on("click", parentSelected);
-            target.append("circle").attr("id", "smalltarget").attr("cx",sw).attr("cy", sh+28).attr("r", 3).style("fill","#ae2b4d").style("stroke","#cc6767").attr("stroke-width",2.5).on("click",parentSelected);
+            target.append("circle").attr("id", "bigfromtarget").attr("cx",sw).attr("cy", sh+28).attr("r",  8).style("fill","#fff").style("stroke","#ae2b4d").attr("stroke-width",2.5).on("click", parentSelected)
+            target.append("circle").attr("id", "smallfromtarget").attr("cx",sw).attr("cy", sh+28).attr("r",  3).style("fill","#ae2b4d").style("stroke","#cc6767").attr("stroke-width",2.5).on("click",parentSelected)
             
             target.append("line")
                   .attr("x1",sw-20).attr("x2",sw-8).attr("y1",0).attr("y2",0)
@@ -375,11 +390,16 @@ const treeref = useD3((root) => {
                   .style("stroke-width", 2.5)
                   .style("fill", "#fff")
           },
-          update=>update,
+          update=>{
+            update.transition().duration(ANIMATION_DURATION).attr("transform", d=>`translate(${d.x-sw/2}, ${d.y})`)
+            update.selectAll("circle#bigfromtarget").on("click", parentSelected).transition().duration(ANIMATION_DURATION).attr("r", d=>eligible.indexOf(d.data.name) == -1 ? 8 :  12)
+            update.selectAll("circle#smallfromtarget").on("click", parentSelected).transition().duration(ANIMATION_DURATION).attr("r", d=>eligible.indexOf(d.data.name) == -1 ? 3 : 5).attr("class", d=>eligible.indexOf(d.data.name) == -1 ? "":"pulse");
+           
+          },
           exit=> exit.call(exit=>exit.remove())
            
           
-        ).on("click", parentSelected).transition().duration(ANIMATION_DURATION).attr("transform", d=>`translate(${d.x-sw/2}, ${d.y})`)
+        )
        
 
     //* now add the control bar
@@ -390,12 +410,18 @@ const treeref = useD3((root) => {
                   const target = enter.append("g").attr("id", "childslides").attr("transform", d=>`translate(${d.x-sw/2}, ${d.y})`)
                   .append("circle").attr("cx",sw-30).attr("cy", 0).attr("r",10).style("fill", "#fff").style("stroke", "#000").attr("stroke-width",2.5).on("click",childSelected)
             },
-            update=>update,
+            update=> {
+              update.on("click", childSelected)
+              update.transition().duration(ANIMATION_DURATION).attr("transform", d=>`translate(${d.x-sw/2}, ${d.y})`)
+              
+              if (child){
+                update.selectAll("circle").style("stroke", (d)=>child.data.name == d.data.name ? "#762bae" : "black");
+                update.selectAll("circle").style("fill", (d)=>child.data.name == d.data.name ? "#496A77" : "white");
+              }
+            },
             exit=> exit.call(exit=>exit.remove())
-        ).on("click", childSelected)
-        .transition().duration(ANIMATION_DURATION)
-         .attr("transform", d=>`translate(${d.x-sw/2}, ${d.y})`)
-        .style("fill", "#fff")
+        )
+        
 
     root.selectAll("g#oneslide")
         .data(tree.descendants(), d => d.data.name)
@@ -411,9 +437,8 @@ const treeref = useD3((root) => {
          .attr("transform", d=>`translate(${d.x-sw/2}, ${d.y})`)
          .style("fill", "#fff")
 
-      //memorise link state to handle link tweenin
-     
-  }, [lookuptable]);
+      
+  }, [lookuptable, child]);
 
  
   //can we do the rendertree, renderlinks and rendertargets in d3 hook?  

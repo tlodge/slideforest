@@ -7,3 +7,32 @@
   fill:"blue";
   stroke:"black";
 }
+
+.pulse {
+  fill: white;
+  fill-opacity: 1;
+  animation-duration: 3s;
+  animation-name: pulse;
+  animation-iteration-count: infinite;
+}
+
+@keyframes pulse {
+  0% {
+    stroke-width: 7px;
+    stroke-opacity: 1;
+   
+  }
+  50% {
+    stroke-width: 3px;
+    stroke-opacity: 0.4;
+  }
+  70%{
+    
+      stroke-width: 5px;
+      stroke-opacity: 0.8;
+  }
+  100%{
+    stroke-width: 7px;
+    stroke-opacity: 1;
+  }
+}
